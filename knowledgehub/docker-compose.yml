@@ -1,0 +1,130 @@
+version: "3.9"
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    environment:
+      - KNOWLEDGEHUB_PROFILE=${KNOWLEDGEHUB_PROFILE:-mini}
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/sqlite/knowledgehub.db}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - VECTORSTORE_BACKEND=${VECTORSTORE_BACKEND:-chroma}
+      - CHROMA_HOST=${CHROMA_HOST:-chroma}
+      - CHROMA_PORT=${CHROMA_PORT:-8100}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - ./data/sqlite:/app/data/sqlite
+      - ./data/logs:/app/data/logs
+    depends_on:
+      - ollama
+      - chroma
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: admin
+    ports:
+      - "${ADMIN_PORT:-8001}:8001"
+    environment:
+      - KNOWLEDGEHUB_PROFILE=${KNOWLEDGEHUB_PROFILE:-mini}
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/sqlite/knowledgehub.db}
+      - GATEWAY_URL=http://gateway:8000
+    volumes:
+      - ./data/sqlite:/app/data/sqlite
+    depends_on:
+      - gateway
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    profiles:
+      - mini
+      - full
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "${CHROMA_PORT:-8100}:8000"
+    volumes:
+      - ./data/chroma:/chroma/chroma
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    profiles:
+      - mini
+      - full
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    profiles:
+      - full
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-knowledgehub}
+      POSTGRES_USER: ${POSTGRES_USER:-knowledgehub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    profiles:
+      - full
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "${VLLM_PORT:-8080}:8000"
+    volumes:
+      - vllm_models:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    profiles:
+      - full
+
+volumes:
+  ollama_data:
+  qdrant_data:
+  postgres_data:
+  vllm_models:
+
+networks:
+  knowledgehub:
+    driver: bridge

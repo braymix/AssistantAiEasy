@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./data:/app/data
+    command: uvicorn src.gateway.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - KNOWLEDGEHUB_PROFILE=mini
+      - LOG_LEVEL=debug
+      - DEBUG=true
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    command: uvicorn src.admin.main:app --host 0.0.0.0 --port 8001 --reload
+    environment:
+      - KNOWLEDGEHUB_PROFILE=mini
+      - LOG_LEVEL=debug
+      - DEBUG=true

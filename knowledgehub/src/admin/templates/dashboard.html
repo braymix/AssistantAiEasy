@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - KnowledgeHub Admin{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Dashboard</h1>
+
+<div class="stats">
+    <div class="card">
+        <div class="stat-value">{{ doc_count }}</div>
+        <div class="stat-label">Documents</div>
+    </div>
+    <div class="card">
+        <div class="stat-value">{{ rule_count }}</div>
+        <div class="stat-label">Detection Rules</div>
+    </div>
+    <div class="card">
+        <div class="stat-value">{{ profile }}</div>
+        <div class="stat-label">Active Profile</div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+    <h2 style="margin-bottom: 1rem;">System Info</h2>
+    <table>
+        <tr><th>Setting</th><th>Value</th></tr>
+        <tr><td>Profile</td><td><span class="badge badge-green">{{ profile }}</span></td></tr>
+        <tr><td>LLM Backend</td><td>{{ llm_backend }}</td></tr>
+        <tr><td>Vector Store</td><td>{{ vectorstore }}</td></tr>
+    </table>
+</div>
+{% endblock %}
