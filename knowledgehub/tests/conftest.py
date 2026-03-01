@@ -7,11 +7,12 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.shared.database import Base
-
 # Force mini profile with in-memory SQLite for tests
 os.environ.setdefault("KNOWLEDGEHUB_PROFILE", "mini")
 os.environ.setdefault("KNOWLEDGEHUB_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+
+from src.shared.database import Base  # noqa: E402
+import src.shared.models  # noqa: E402, F401 – register all models on Base.metadata
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 

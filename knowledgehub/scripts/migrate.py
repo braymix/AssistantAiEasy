@@ -10,8 +10,6 @@ from src.config import get_settings
 from src.config.logging import setup_logging, get_logger
 from src.shared.database import init_db, dispose_engine
 
-import src.knowledge.models  # noqa: F401
-
 logger = get_logger(__name__)
 
 
@@ -27,6 +25,7 @@ async def main():
         logger.info("migration_complete")
     elif action == "reset":
         logger.info("resetting_database")
+        import src.shared.models  # noqa: F401 – register models
         from sqlalchemy.ext.asyncio import create_async_engine
         from src.shared.database import Base
 

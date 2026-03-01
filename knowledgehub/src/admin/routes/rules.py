@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.knowledge.models import DetectionRule
+from src.shared.models import DetectionRule
 from src.shared.database import get_db_session
 
 router = APIRouter()

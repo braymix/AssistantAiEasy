@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.logging import get_logger
 from src.knowledge.embeddings import get_embedding_provider
-from src.knowledge.models import Document
+from src.shared.models import Document
 from src.knowledge.vectorstore import SearchResult, get_vector_store
 from src.shared.exceptions import NotFoundError
 from src.shared.utils import chunk_text

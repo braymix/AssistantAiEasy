@@ -9,6 +9,7 @@
         <thead>
             <tr>
                 <th>Name</th>
+                <th>Type</th>
                 <th>Description</th>
                 <th>Priority</th>
                 <th>Status</th>
@@ -19,6 +20,7 @@
             {% for rule in rules %}
             <tr>
                 <td><strong>{{ rule.name }}</strong></td>
+                <td><span class="badge badge-gray">{{ rule.rule_type.value }}</span></td>
                 <td>{{ rule.description or '-' }}</td>
                 <td>{{ rule.priority }}</td>
                 <td>
@@ -38,7 +40,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" style="text-align:center; color:#999;">No rules configured. Run <code>make seed</code> to add default rules.</td>
+                <td colspan="6" style="text-align:center; color:#999;">No rules configured. Run <code>make seed</code> to add default rules.</td>
             </tr>
             {% endfor %}
         </tbody>
