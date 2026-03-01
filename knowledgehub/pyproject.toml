@@ -1,0 +1,55 @@
+[tool.poetry]
+name = "knowledgehub"
+version = "0.1.0"
+description = "AI-powered knowledge base with context detection and LLM integration"
+authors = ["KnowledgeHub Team"]
+readme = "README.md"
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.0"
+uvicorn = { version = "^0.34.0", extras = ["standard"] }
+pydantic = "^2.10.0"
+pydantic-settings = "^2.7.0"
+sqlalchemy = { version = "^2.0.36", extras = ["asyncio"] }
+aiosqlite = "^0.20.0"
+asyncpg = "^0.30.0"
+chromadb = "^0.5.23"
+qdrant-client = "^1.12.0"
+httpx = "^0.28.0"
+jinja2 = "^3.1.4"
+python-multipart = "^0.0.18"
+structlog = "^24.4.0"
+alembic = "^1.14.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+pytest-cov = "^6.0.0"
+httpx = "^0.28.0"
+ruff = "^0.8.0"
+mypy = "^1.13.0"
+pre-commit = "^4.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+warn_return_any = true
+warn_unused_configs = true
