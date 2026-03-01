@@ -1,4 +1,9 @@
-"""Initialize the database – creates all tables."""
+"""Initialize the database – creates all tables.
+
+Tables created:
+  conversations, messages, contexts, knowledge_items,
+  detection_rules, documents
+"""
 
 import asyncio
 import sys
@@ -10,9 +15,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import get_settings
 from src.config.logging import setup_logging, get_logger
 from src.shared.database import init_db, dispose_engine
-
-# Import models so Base.metadata knows about them
-import src.knowledge.models  # noqa: F401
 
 logger = get_logger(__name__)
 
