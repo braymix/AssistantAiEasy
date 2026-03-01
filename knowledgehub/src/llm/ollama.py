@@ -1,5 +1,6 @@
 """Ollama LLM provider – for mini profile / local deployment."""
 
+import json as _json
 from collections.abc import AsyncGenerator
 
 import httpx
@@ -21,41 +22,30 @@ class OllamaProvider(LLMProvider):
         self._model = settings.ollama_model
         self._timeout = settings.ollama_timeout
 
+    # -- raw prompt ----------------------------------------------------------
+
     async def generate(self, prompt: str, **kwargs) -> str:
         url = f"{self._base_url}/api/generate"
-        payload = {
-            "model": self._model,
-            "prompt": prompt,
-            "stream": False,
-            **kwargs,
-        }
+        payload = {"model": self._model, "prompt": prompt, "stream": False, **kwargs}
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
-                data = response.json()
-                return data.get("response", "")
+                return response.json().get("response", "")
         except httpx.HTTPError as exc:
             logger.error("ollama_generate_error", error=str(exc))
             raise LLMError(f"Ollama generation failed: {exc}") from exc
 
     async def generate_stream(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
         url = f"{self._base_url}/api/generate"
-        payload = {
-            "model": self._model,
-            "prompt": prompt,
-            "stream": True,
-            **kwargs,
-        }
+        payload = {"model": self._model, "prompt": prompt, "stream": True, **kwargs}
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 async with client.stream("POST", url, json=payload) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
                         if line:
-                            import json
-
-                            data = json.loads(line)
+                            data = _json.loads(line)
                             token = data.get("response", "")
                             if token:
                                 yield token
@@ -64,6 +54,44 @@ class OllamaProvider(LLMProvider):
         except httpx.HTTPError as exc:
             logger.error("ollama_stream_error", error=str(exc))
             raise LLMError(f"Ollama streaming failed: {exc}") from exc
+
+    # -- chat (messages list) ------------------------------------------------
+
+    async def chat(self, messages: list[dict], **kwargs) -> str:
+        """Ollama /api/chat – accepts [{role, content}, ...]."""
+        url = f"{self._base_url}/api/chat"
+        payload = {"model": self._model, "messages": messages, "stream": False, **kwargs}
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return data.get("message", {}).get("content", "")
+        except httpx.HTTPError as exc:
+            logger.error("ollama_chat_error", error=str(exc))
+            raise LLMError(f"Ollama chat failed: {exc}") from exc
+
+    async def chat_stream(self, messages: list[dict], **kwargs) -> AsyncGenerator[str, None]:
+        """Ollama /api/chat streaming – yields content deltas."""
+        url = f"{self._base_url}/api/chat"
+        payload = {"model": self._model, "messages": messages, "stream": True, **kwargs}
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with client.stream("POST", url, json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if line:
+                            data = _json.loads(line)
+                            token = data.get("message", {}).get("content", "")
+                            if token:
+                                yield token
+                            if data.get("done", False):
+                                break
+        except httpx.HTTPError as exc:
+            logger.error("ollama_chat_stream_error", error=str(exc))
+            raise LLMError(f"Ollama chat streaming failed: {exc}") from exc
+
+    # -- health --------------------------------------------------------------
 
     async def health_check(self) -> bool:
         try:
