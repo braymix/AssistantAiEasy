@@ -1,6 +1,7 @@
 """Abstract LLM provider interface and factory."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 
 from src.config.settings import LLMBackend, get_settings
 
@@ -13,8 +14,16 @@ class LLMProvider(ABC):
         """Generate a text completion for the given prompt."""
 
     @abstractmethod
-    async def generate_stream(self, prompt: str, **kwargs):
+    async def generate_stream(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
         """Stream a text completion token by token."""
+
+    @abstractmethod
+    async def chat(self, messages: list[dict], **kwargs) -> str:
+        """Chat completion: accept a list of {role, content} messages."""
+
+    @abstractmethod
+    async def chat_stream(self, messages: list[dict], **kwargs) -> AsyncGenerator[str, None]:
+        """Streaming chat completion yielding content deltas."""
 
     @abstractmethod
     async def health_check(self) -> bool:
