@@ -39,7 +39,7 @@ from src.gateway.schemas.chat import (
     UsageInfo,
 )
 from src.gateway.services.conversation import ConversationManager, get_conversation_manager
-from src.knowledge.service import KnowledgeService
+from src.knowledge.service import KnowledgeService, get_knowledge_service
 from src.llm.base import get_llm_provider
 from src.shared.database import get_db_session
 from src.shared.exceptions import LLMError
@@ -79,6 +79,7 @@ def _extract_last_user_text(messages: list[dict]) -> str:
 
 async def _detect_and_enrich(
     session: AsyncSession,
+    knowledge_svc: KnowledgeService,
     user_text: str,
     messages_dicts: list[dict],
 ) -> tuple[list[dict], list[str]]:
@@ -90,21 +91,18 @@ async def _detect_and_enrich(
     if detection.confidence < 0.3 or not detected_topics:
         return messages_dicts, detected_topics
 
-    # Retrieve knowledge for the detected contexts
-    service = KnowledgeService(session)
-    results = await service.search(user_text, top_k=5)
+    # Build RAG context via KnowledgeService
+    context_block = await knowledge_svc.build_rag_context(
+        query=user_text,
+        detected_contexts=detected_topics,
+    )
 
-    if not results:
+    if not context_block:
         return messages_dicts, detected_topics
 
-    context_block = "\n\n---\n\n".join(r.content for r in results)
     rag_system = RAG_SYSTEM_TEMPLATE.format(context=context_block)
 
-    logger.info(
-        "rag_enrichment",
-        topics=detected_topics,
-        chunks=len(results),
-    )
+    logger.info("rag_enrichment", topics=detected_topics)
 
     # Inject the RAG system message right after any existing system messages
     enriched: list[dict] = []
@@ -115,7 +113,6 @@ async def _detect_and_enrich(
             enriched.append({"role": "system", "content": rag_system})
             injected = True
 
-    # If there were no system messages, prepend the RAG system message
     if not injected:
         enriched.insert(0, {"role": "system", "content": rag_system})
 
@@ -132,6 +129,7 @@ async def chat_completions(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
     conv_mgr: ConversationManager = Depends(get_conversation_manager),
+    knowledge_svc: KnowledgeService = Depends(get_knowledge_service),
 ):
     """OpenAI-compatible chat completions endpoint (proxy with intelligence)."""
     model = _resolve_model(body.model)
@@ -155,7 +153,7 @@ async def chat_completions(
 
     # 2. Detect context & RAG enrichment
     enriched_messages, detected_topics = await _detect_and_enrich(
-        session, user_text, messages_dicts,
+        session, knowledge_svc, user_text, messages_dicts,
     )
 
     # Update user message with detected contexts
