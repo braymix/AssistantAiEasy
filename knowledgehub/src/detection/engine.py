@@ -37,6 +37,8 @@ from src.gateway.schemas.detection import DetectionResult, TriggeredRule
 from src.shared.models import DetectionRule, RuleType
 
 if TYPE_CHECKING:
+    from src.detection.action_registry import ActionRegistry
+    from src.detection.triggers import ActionResult, TriggerContext
     from src.gateway.schemas.chat import ChatCompletionRequest
     from src.knowledge.embeddings import EmbeddingProvider
     from src.knowledge.service import KnowledgeService
@@ -66,6 +68,7 @@ class EnrichedRequest:
     enriched_messages: list[dict]
     rag_context: str
     detected: DetectionResult
+    action_results: list = field(default_factory=list)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -235,8 +238,11 @@ class DetectionEngine:
         messages: list[dict],
         context: DetectionContext | None = None,
         knowledge_svc: KnowledgeService | None = None,
+        trigger_context: TriggerContext | None = None,
+        conversation_id: str | None = None,
     ) -> EnrichedRequest:
-        """Detect on the last user message, then inject RAG context.
+        """Detect on the last user message, then inject RAG context and
+        execute configured trigger actions.
 
         Parameters
         ----------
@@ -246,6 +252,11 @@ class DetectionEngine:
             Optional detection context.
         knowledge_svc : KnowledgeService | None
             If provided, used to build RAG context.
+        trigger_context : TriggerContext | None
+            If provided, used to execute trigger actions.  If ``None`` and
+            there are actions to execute, a default context is built.
+        conversation_id : str | None
+            Conversation ID for trigger actions.
         """
         # Extract last user message
         user_text = ""
@@ -269,12 +280,97 @@ class DetectionEngine:
                 rag_system = RAG_SYSTEM_TEMPLATE.format(context=rag_context)
                 enriched = _inject_system_message(messages, rag_system)
 
+        # Execute trigger actions if any rules matched
+        action_results = []
+        if detection.triggered_rules:
+            if trigger_context is None:
+                from src.detection.triggers import TriggerContext as TC
+                trigger_context = TC(
+                    session=self._session,
+                    knowledge_svc=knowledge_svc,
+                    conversation_id=conversation_id,
+                    user_text=user_text,
+                    messages=messages,
+                )
+            action_results = await self.execute_actions(
+                detection=detection,
+                trigger_context=trigger_context,
+            )
+
         return EnrichedRequest(
             original_messages=messages,
             enriched_messages=enriched,
             rag_context=rag_context,
             detected=detection,
+            action_results=action_results,
         )
+
+    # ------------------------------------------------------------------
+    # 5. execute_actions
+    # ------------------------------------------------------------------
+
+    async def execute_actions(
+        self,
+        detection: DetectionResult,
+        trigger_context: TriggerContext,
+        action_registry: ActionRegistry | None = None,
+    ) -> list[ActionResult]:
+        """Execute configured actions for all triggered rules.
+
+        Reads ``rule_config["actions"]`` from each matched DB rule and
+        dispatches them through the :class:`ActionRegistry`.
+
+        Parameters
+        ----------
+        detection : DetectionResult
+            Result from :meth:`detect`.
+        trigger_context : TriggerContext
+            Runtime context for actions.
+        action_registry : ActionRegistry | None
+            If ``None``, the default singleton is used.
+        """
+        from src.detection.action_registry import get_action_registry
+        from src.detection.triggers import ActionResult as AR
+
+        registry = action_registry or get_action_registry()
+
+        all_results: list[AR] = []
+
+        # Load DB rules to get action configs
+        db_rules = await self._load_db_rules()
+        db_rule_map = {r.name: r for r in db_rules}
+
+        for triggered in detection.triggered_rules:
+            db_rule = db_rule_map.get(triggered.rule_name)
+            if db_rule is None:
+                continue
+
+            config = db_rule.rule_config or {}
+            action_configs = config.get("actions", [])
+            if not action_configs:
+                continue
+
+            # Build a RuleMatch from the triggered rule for the action
+            rule_match = RuleMatch(
+                rule_name=triggered.rule_name,
+                confidence=triggered.confidence,
+                extracted={"matched_keywords": triggered.matched_keywords},
+                contexts=list(db_rule.target_contexts or []),
+            )
+
+            results = await registry.execute_for_match(
+                match=rule_match,
+                context=trigger_context,
+                action_configs=action_configs,
+            )
+            all_results.extend(results)
+
+        logger.info(
+            "actions_executed",
+            total_actions=len(all_results),
+            successes=sum(1 for r in all_results if r.success),
+        )
+        return all_results
 
     # ------------------------------------------------------------------
     # Parallel rule evaluation
