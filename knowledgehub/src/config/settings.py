@@ -33,6 +33,11 @@ class LLMBackend(str, Enum):
     VLLM = "vllm"
 
 
+class EmbeddingBackend(str, Enum):
+    LOCAL = "local"
+    OLLAMA = "ollama"
+
+
 # ---------------------------------------------------------------------------
 # Profile-specific defaults
 # ---------------------------------------------------------------------------
@@ -42,8 +47,11 @@ _PROFILE_DEFAULTS: dict[str, dict] = {
         "database_url": "sqlite+aiosqlite:///./data/sqlite/knowledgehub.db",
         "vectorstore_backend": VectorStoreBackend.CHROMA,
         "llm_backend": LLMBackend.OLLAMA,
+        "embedding_backend": EmbeddingBackend.LOCAL,
         "ollama_model": "llama3.2:3b",
+        "embedding_model": "all-MiniLM-L6-v2",
         "embedding_dimension": 384,
+        "embedding_batch_size": 64,
         "max_concurrent_requests": 4,
         "chunk_size": 512,
         "chunk_overlap": 50,
@@ -52,8 +60,11 @@ _PROFILE_DEFAULTS: dict[str, dict] = {
         "database_url": "postgresql+asyncpg://knowledgehub:changeme@postgres:5432/knowledgehub",
         "vectorstore_backend": VectorStoreBackend.QDRANT,
         "llm_backend": LLMBackend.VLLM,
+        "embedding_backend": EmbeddingBackend.OLLAMA,
         "vllm_model": "meta-llama/Llama-3.1-8B-Instruct",
-        "embedding_dimension": 384,
+        "ollama_embedding_model": "nomic-embed-text",
+        "embedding_dimension": 768,
+        "embedding_batch_size": 128,
         "max_concurrent_requests": 32,
         "chunk_size": 1024,
         "chunk_overlap": 100,
@@ -99,6 +110,7 @@ class Settings(BaseSettings):
     chroma_host: str = "chroma"
     chroma_port: int = 8100
     chroma_collection: str = "knowledgehub"
+    chroma_persist_dir: str = "./data/chroma"
 
     # Qdrant
     qdrant_host: str = "qdrant"
@@ -106,8 +118,11 @@ class Settings(BaseSettings):
     qdrant_collection: str = "knowledgehub"
 
     # ── Embeddings ────────────────────────────────────────────────────────
+    embedding_backend: EmbeddingBackend = EmbeddingBackend.LOCAL
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
+    embedding_batch_size: int = 64
+    ollama_embedding_model: str = "nomic-embed-text"
 
     # ── LLM ───────────────────────────────────────────────────────────────
     llm_backend: LLMBackend = LLMBackend.OLLAMA

@@ -1,13 +1,16 @@
 """Knowledge base service – orchestrates documents, embeddings, and vector store."""
 
+import uuid
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.logging import get_logger
+from src.config.settings import get_settings
 from src.knowledge.embeddings import get_embedding_provider
-from src.shared.models import Document
 from src.knowledge.vectorstore import SearchResult, get_vector_store
 from src.shared.exceptions import NotFoundError
+from src.shared.models import Document
 from src.shared.utils import chunk_text
 
 logger = get_logger(__name__)
@@ -33,19 +36,22 @@ class KnowledgeService:
         await self._session.flush()
 
         # Chunk and embed
-        from src.config import get_settings
-
         settings = get_settings()
         chunks = chunk_text(content, chunk_size=settings.chunk_size, overlap=settings.chunk_overlap)
         doc.chunk_count = len(chunks)
 
         if chunks:
-            embeddings = self._embedder.embed(chunks)
+            embeddings = await self._embedder.embed(chunks)
+            chunk_ids = [f"{doc.id}_{i}" for i in range(len(chunks))]
+            chunk_metas = [
+                {"title": title, "doc_id": doc.id, "chunk_index": i, **metadata}
+                for i in range(len(chunks))
+            ]
             await self._vectorstore.add(
-                doc_id=doc.id,
-                chunks=chunks,
+                texts=chunks,
+                metadatas=chunk_metas,
+                ids=chunk_ids,
                 embeddings=embeddings,
-                metadata={"title": title, **metadata},
             )
 
         logger.info("document_added", doc_id=doc.id, chunks=len(chunks))
@@ -68,12 +74,15 @@ class KnowledgeService:
 
     async def delete_document(self, document_id: str) -> None:
         doc = await self.get_document(document_id)
-        await self._vectorstore.delete(doc.id)
+        # Retrieve chunk IDs to delete from vector store
+        chunk_ids = [f"{doc.id}_{i}" for i in range(doc.chunk_count)]
+        if chunk_ids:
+            await self._vectorstore.delete(chunk_ids)
         await self._session.delete(doc)
         logger.info("document_deleted", doc_id=document_id)
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchResult]:
         """Semantic search: embed query and search the vector store."""
-        embedding = self._embedder.embed_single(query)
-        results = await self._vectorstore.search(embedding, top_k=top_k)
+        embedding = await self._embedder.embed_single(query)
+        results = await self._vectorstore.search(embedding, n_results=top_k)
         return results

@@ -91,7 +91,6 @@ class SearchRequest(BaseModel):
 class SearchResultItem(BaseModel):
     id: str
     content: str
-    title: str
     score: float
     metadata: dict = Field(default_factory=dict)
 
@@ -114,7 +113,6 @@ async def search_knowledge(
             SearchResultItem(
                 id=r.id,
                 content=r.content,
-                title=r.title,
                 score=r.score,
                 metadata=r.metadata,
             )
