@@ -48,12 +48,6 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-RAG_SYSTEM_TEMPLATE = (
-    "Use the following knowledge base excerpts to inform your answer. "
-    "If the excerpts are not relevant, ignore them.\n\n"
-    "---BEGIN KNOWLEDGE---\n{context}\n---END KNOWLEDGE---"
-)
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
@@ -83,40 +77,19 @@ async def _detect_and_enrich(
     user_text: str,
     messages_dicts: list[dict],
 ) -> tuple[list[dict], list[str]]:
-    """Run detection on user text; if contexts found, inject RAG system message."""
+    """Run detection on user text; if contexts found, inject RAG system message.
+
+    Delegates to :meth:`DetectionEngine.detect_and_enrich` which handles
+    parallel rule evaluation, RAG context assembly, and message injection.
+    """
     engine = DetectionEngine(session)
-    detection = await engine.detect(user_text)
-    detected_topics = detection.suggested_topics
-
-    if detection.confidence < 0.3 or not detected_topics:
-        return messages_dicts, detected_topics
-
-    # Build RAG context via KnowledgeService
-    context_block = await knowledge_svc.build_rag_context(
-        query=user_text,
-        detected_contexts=detected_topics,
+    result = await engine.detect_and_enrich(
+        messages=messages_dicts,
+        knowledge_svc=knowledge_svc,
     )
 
-    if not context_block:
-        return messages_dicts, detected_topics
-
-    rag_system = RAG_SYSTEM_TEMPLATE.format(context=context_block)
-
-    logger.info("rag_enrichment", topics=detected_topics)
-
-    # Inject the RAG system message right after any existing system messages
-    enriched: list[dict] = []
-    injected = False
-    for msg in messages_dicts:
-        enriched.append(msg)
-        if msg["role"] == "system" and not injected:
-            enriched.append({"role": "system", "content": rag_system})
-            injected = True
-
-    if not injected:
-        enriched.insert(0, {"role": "system", "content": rag_system})
-
-    return enriched, detected_topics
+    detected_topics = result.detected.suggested_topics
+    return result.enriched_messages, detected_topics
 
 
 # ═══════════════════════════════════════════════════════════════════════════
