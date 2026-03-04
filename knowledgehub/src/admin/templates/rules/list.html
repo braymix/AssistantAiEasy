@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Detection Rules - KnowledgeHub Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Detection Rules</h1>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ rules|length }} rule{{ 's' if rules|length != 1 }} configured</p>
+  </div>
+  <a href="/ui/rules/new" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    New Rule
+  </a>
+</div>
+
+<!-- Filters -->
+<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 mb-4">
+  <form method="get" action="/ui/rules" class="flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[150px]">
+      <label for="search" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Search</label>
+      <input type="text" id="search" name="search" value="{{ search or '' }}" placeholder="Rule name..." class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500 focus:border-brand-500" aria-label="Search rules by name">
+    </div>
+    <div>
+      <label for="rule_type" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Type</label>
+      <select id="rule_type" name="rule_type" class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500" aria-label="Filter by rule type">
+        <option value="">All</option>
+        <option value="keyword" {{ 'selected' if filter_type == 'keyword' }}>Keyword</option>
+        <option value="regex" {{ 'selected' if filter_type == 'regex' }}>Regex</option>
+        <option value="semantic" {{ 'selected' if filter_type == 'semantic' }}>Semantic</option>
+        <option value="composite" {{ 'selected' if filter_type == 'composite' }}>Composite</option>
+      </select>
+    </div>
+    <div>
+      <label for="enabled" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</label>
+      <select id="enabled" name="enabled" class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500" aria-label="Filter by status">
+        <option value="">All</option>
+        <option value="true" {{ 'selected' if filter_enabled == 'true' }}>Enabled</option>
+        <option value="false" {{ 'selected' if filter_enabled == 'false' }}>Disabled</option>
+      </select>
+    </div>
+    <button type="submit" class="px-4 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 font-medium transition">Filter</button>
+    {% if search or filter_type or filter_enabled %}
+    <a href="/ui/rules" class="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Rules table -->
+<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm" aria-label="Detection rules list">
+      <thead>
+        <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+          <th class="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Name</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Type</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400 hidden md:table-cell">Contexts</th>
+          <th class="text-center px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Priority</th>
+          <th class="text-center px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Status</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rules-table" class="divide-y divide-gray-100 dark:divide-gray-800">
+        {% for rule in rules %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition" id="rule-row-{{ rule.id }}">
+          <td class="px-4 py-3">
+            <div class="font-medium text-gray-900 dark:text-white">{{ rule.name }}</div>
+            {% if rule.description %}<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate max-w-xs">{{ rule.description }}</div>{% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+              {% if rule.rule_type.value == 'keyword' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+              {% elif rule.rule_type.value == 'regex' %}bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400
+              {% elif rule.rule_type.value == 'semantic' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400
+              {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+              {{ rule.rule_type.value }}
+            </span>
+          </td>
+          <td class="px-4 py-3 hidden md:table-cell">
+            <div class="flex flex-wrap gap-1">
+              {% for ctx in (rule.target_contexts or [])[:3] %}
+              <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">{{ ctx }}</span>
+              {% endfor %}
+              {% if (rule.target_contexts or [])|length > 3 %}
+              <span class="text-xs text-gray-400">+{{ (rule.target_contexts|length) - 3 }}</span>
+              {% endif %}
+            </div>
+          </td>
+          <td class="px-4 py-3 text-center font-mono text-gray-600 dark:text-gray-400">{{ rule.priority }}</td>
+          <td class="px-4 py-3 text-center">
+            <button
+              hx-post="/ui/htmx/rules/{{ rule.id }}/toggle"
+              hx-target="#rule-row-{{ rule.id }}"
+              hx-swap="outerHTML"
+              class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer transition
+                {% if rule.enabled %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50
+                {% else %}bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700{% endif %}"
+              aria-label="{{ 'Disable' if rule.enabled else 'Enable' }} rule {{ rule.name }}">
+              <span class="w-1.5 h-1.5 rounded-full {% if rule.enabled %}bg-green-500{% else %}bg-gray-400{% endif %}"></span>
+              {{ 'Enabled' if rule.enabled else 'Disabled' }}
+            </button>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex items-center justify-end gap-1">
+              <a href="/ui/rules/{{ rule.id }}" class="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition" aria-label="Edit rule {{ rule.name }}" title="Edit">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              </a>
+              <button
+                hx-delete="/ui/htmx/rules/{{ rule.id }}"
+                hx-target="#rule-row-{{ rule.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Delete rule '{{ rule.name }}'?"
+                class="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition"
+                aria-label="Delete rule {{ rule.name }}" title="Delete">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="px-4 py-12 text-center text-gray-400 dark:text-gray-600">
+            <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            No rules found. <a href="/ui/rules/new" class="text-brand-600 dark:text-brand-400 hover:underline">Create one</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

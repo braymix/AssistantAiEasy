@@ -1,41 +1,173 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}KnowledgeHub Admin{% endblock %}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
-        nav { background: #1a1a2e; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-        nav a { color: #e0e0e0; text-decoration: none; margin-left: 1.5rem; }
-        nav a:hover { color: #fff; }
-        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
-        .card { background: #fff; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-        .stat-value { font-size: 2rem; font-weight: bold; color: #1a1a2e; }
-        .stat-label { color: #666; font-size: 0.9rem; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f9f9f9; font-weight: 600; }
-        .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; }
-        .badge-green { background: #d4edda; color: #155724; }
-        .badge-gray { background: #e2e3e5; color: #383d41; }
-        .btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
-        .btn-sm { padding: 0.2rem 0.6rem; }
-        .btn-primary { background: #1a1a2e; color: #fff; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}KnowledgeHub Admin{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {
+        colors: { brand: { 50:'#eef2ff',100:'#e0e7ff',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' }}
+      }}
+    }
+  </script>
+  <style>
+    [x-cloak]{display:none!important}
+    .htmx-indicator{opacity:0;transition:opacity .2s ease-in}
+    .htmx-request .htmx-indicator,.htmx-request.htmx-indicator{opacity:1}
+    /* toast */
+    #toast-container{position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem}
+    .toast{padding:.75rem 1.25rem;border-radius:.5rem;color:#fff;font-size:.875rem;opacity:0;transform:translateX(100%);transition:all .3s ease}
+    .toast.show{opacity:1;transform:translateX(0)}
+    .toast-success{background:#059669}
+    .toast-error{background:#dc2626}
+    .toast-info{background:#2563eb}
+    /* JSON editor */
+    .json-editor{font-family:ui-monospace,SFMono-Regular,monospace;font-size:.8rem;tab-size:2;resize:vertical}
+  </style>
+  {% block head %}{% endblock %}
 </head>
-<body>
-    <nav>
-        <strong>KnowledgeHub Admin</strong>
-        <div>
-            <a href="/">Dashboard</a>
-            <a href="/rules">Rules</a>
+<body class="h-full bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100" hx-boost="true">
+
+  <!-- Toast container -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <div class="flex h-full">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="hidden lg:flex flex-col w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 min-h-screen">
+      <div class="p-4 border-b border-gray-200 dark:border-gray-800">
+        <a href="/ui" class="flex items-center gap-2 text-brand-600 dark:text-brand-400 font-bold text-lg" aria-label="Home">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+          KnowledgeHub
+        </a>
+      </div>
+      <nav class="flex-1 p-3 space-y-1" aria-label="Main navigation">
+        <a href="/ui" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'dashboard' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}" aria-current="{% if active_page == 'dashboard' %}page{% endif %}">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          Dashboard
+        </a>
+        <a href="/ui/rules" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'rules' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}" aria-current="{% if active_page == 'rules' %}page{% endif %}">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          Rules
+        </a>
+        <a href="/ui/contexts" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'contexts' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}" aria-current="{% if active_page == 'contexts' %}page{% endif %}">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+          Contexts
+        </a>
+        <a href="/ui/knowledge" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'knowledge' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}" aria-current="{% if active_page == 'knowledge' %}page{% endif %}">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          Knowledge
+        </a>
+        <a href="/ui/knowledge/review" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'review' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}" aria-current="{% if active_page == 'review' %}page{% endif %}">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Review
+          {% if pending_count is defined and pending_count > 0 %}
+          <span class="ml-auto inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">{{ pending_count }}</span>
+          {% endif %}
+        </a>
+      </nav>
+      <div class="p-3 border-t border-gray-200 dark:border-gray-800">
+        <button id="dark-toggle" class="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" aria-label="Toggle dark mode">
+          <svg id="icon-sun" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg id="icon-moon" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+          <span class="dark:hidden">Dark mode</span>
+          <span class="hidden dark:inline">Light mode</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <!-- Mobile header -->
+      <header class="lg:hidden flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+        <button id="mobile-menu-btn" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Open menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <span class="font-bold text-brand-600 dark:text-brand-400">KnowledgeHub</span>
+        <button id="dark-toggle-mobile" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Toggle dark mode">
+          <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
+      </header>
+
+      <!-- Mobile sidebar overlay -->
+      <div id="mobile-overlay" class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden" aria-hidden="true"></div>
+      <div id="mobile-sidebar" class="fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 z-50 -translate-x-full transition-transform lg:hidden">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+          <span class="font-bold text-brand-600 dark:text-brand-400">KnowledgeHub</span>
+          <button id="mobile-close-btn" class="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800" aria-label="Close menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
         </div>
-    </nav>
-    <div class="container">
+        <nav class="p-3 space-y-1" aria-label="Mobile navigation">
+          <a href="/ui" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'dashboard' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">Dashboard</a>
+          <a href="/ui/rules" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'rules' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">Rules</a>
+          <a href="/ui/contexts" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'contexts' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">Contexts</a>
+          <a href="/ui/knowledge" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'knowledge' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">Knowledge</a>
+          <a href="/ui/knowledge/review" class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {% if active_page == 'review' %}bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400{% else %}text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800{% endif %}">Review</a>
+        </nav>
+      </div>
+
+      <!-- Page content -->
+      <main class="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         {% block content %}{% endblock %}
+      </main>
     </div>
+  </div>
+
+  <script>
+    // ── Dark mode ──────────────────────────────────────────────────────
+    (function(){
+      const html = document.documentElement;
+      const stored = localStorage.getItem('theme');
+      if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme:dark)').matches)) {
+        html.classList.add('dark');
+      }
+      function toggle() {
+        html.classList.toggle('dark');
+        localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+      }
+      document.getElementById('dark-toggle')?.addEventListener('click', toggle);
+      document.getElementById('dark-toggle-mobile')?.addEventListener('click', toggle);
+    })();
+
+    // ── Mobile sidebar ─────────────────────────────────────────────────
+    (function(){
+      const sidebar = document.getElementById('mobile-sidebar');
+      const overlay = document.getElementById('mobile-overlay');
+      function open() { sidebar.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); }
+      function close() { sidebar.classList.add('-translate-x-full'); overlay.classList.add('hidden'); }
+      document.getElementById('mobile-menu-btn')?.addEventListener('click', open);
+      document.getElementById('mobile-close-btn')?.addEventListener('click', close);
+      overlay?.addEventListener('click', close);
+    })();
+
+    // ── Toast notifications ────────────────────────────────────────────
+    window.showToast = function(message, type) {
+      type = type || 'info';
+      var container = document.getElementById('toast-container');
+      var toast = document.createElement('div');
+      toast.className = 'toast toast-' + type;
+      toast.setAttribute('role', 'status');
+      toast.textContent = message;
+      container.appendChild(toast);
+      requestAnimationFrame(function(){ toast.classList.add('show'); });
+      setTimeout(function(){ toast.classList.remove('show'); setTimeout(function(){ toast.remove(); }, 300); }, 3000);
+    };
+
+    // ── HTMX global event hooks ────────────────────────────────────────
+    document.body.addEventListener('htmx:afterRequest', function(e) {
+      var msg = e.detail.xhr?.getResponseHeader('X-Toast-Message');
+      var type = e.detail.xhr?.getResponseHeader('X-Toast-Type') || 'success';
+      if (msg) showToast(msg, type);
+    });
+    document.body.addEventListener('htmx:responseError', function(e) {
+      showToast('Request failed: ' + (e.detail.xhr?.status || 'unknown'), 'error');
+    });
+  </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -19,6 +19,7 @@ from src.admin.routes import analytics as analytics_routes
 from src.admin.routes import contexts as contexts_routes
 from src.admin.routes import knowledge as knowledge_routes
 from src.admin.routes import rules as rules_routes
+from src.admin.routes import ui as ui_routes
 from src.config import get_settings
 from src.config.logging import get_logger, setup_logging
 from src.gateway.middleware.logging import LoggingMiddleware
@@ -63,10 +64,15 @@ def create_admin_app() -> FastAPI:
     # ── Request logging ────────────────────────────────────────────────
     app.add_middleware(LoggingMiddleware)
 
-    # ── HTML dashboard (legacy, no auth) ───────────────────────────────
+    # ── Templates ──────────────────────────────────────────────────────
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     app.state.templates = templates
+
+    # ── HTML dashboard (legacy, no auth) ───────────────────────────────
     app.include_router(dashboard.router, tags=["dashboard"])
+
+    # ── UI routes (templates + HTMX, no auth) ─────────────────────────
+    app.include_router(ui_routes.router, tags=["ui"])
 
     # ── REST API (API-key protected) ───────────────────────────────────
     api_router = APIRouter(
