@@ -141,6 +141,10 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 50
 
+    # ── Open WebUI integration ─────────────────────────────────────────────
+    openwebui_url: str = "http://localhost:3000"
+    openwebui_token: str = ""
+
     # ── Logging ───────────────────────────────────────────────────────────
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     log_format: Literal["json", "console"] = "json"
