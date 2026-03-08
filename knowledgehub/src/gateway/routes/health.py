@@ -28,7 +28,8 @@ async def readiness() -> dict:
     # LLM backend
     try:
         llm = get_llm_provider()
-        checks["llm"] = await llm.health_check()
+        status = await llm.health_check()
+        checks["llm"] = status.healthy
     except Exception:
         checks["llm"] = False
 

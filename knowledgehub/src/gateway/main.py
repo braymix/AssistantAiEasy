@@ -48,11 +48,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 2. LLM health check (non-blocking – log warning if unreachable)
     llm = get_llm_provider()
     try:
-        healthy = await llm.health_check()
-        if healthy:
+        status = await llm.health_check()
+        if status.healthy:
             logger.info("llm_backend_healthy", backend=settings.llm_backend.value)
         else:
-            logger.warning("llm_backend_unreachable", backend=settings.llm_backend.value)
+            logger.warning("llm_backend_unreachable", backend=settings.llm_backend.value, detail=status.detail)
     except Exception as exc:
         logger.warning("llm_health_check_failed", error=str(exc))
 
