@@ -11,10 +11,13 @@ from src.llm.models import (
     UsageInfo,
 )
 
+from src.llm.rag import RAGOrchestrator
+
 __all__ = [
     "LLMProvider",
     "get_llm_provider",
     "create_llm_provider",
+    "RAGOrchestrator",
     "ChatCompletion",
     "ChatCompletionChunk",
     "ChatMessage",
