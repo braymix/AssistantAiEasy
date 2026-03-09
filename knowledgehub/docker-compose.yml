@@ -115,7 +115,9 @@ services:
     ports:
       - "${OPENWEBUI_PORT:-3000}:8080"
     environment:
-      - OLLAMA_BASE_URL=http://gateway:8000
+      - OPENAI_API_BASE_URL=http://gateway:8000/v1
+      - OPENAI_API_KEY=knowledgehub
+      - OLLAMA_BASE_URL=
       - WEBUI_AUTH=${OPENWEBUI_AUTH:-true}
       - WEBUI_SECRET_KEY=${OPENWEBUI_SECRET:-changeme}
     volumes:
