@@ -1,0 +1,161 @@
+# ============================================================================
+# KnowledgeHub – Docker Compose Enterprise Override
+# ============================================================================
+# Adds: PostgreSQL, Qdrant, Redis, vLLM (GPU), replicas
+# Usage: docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+# ============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # Gateway – enterprise overrides
+  # --------------------------------------------------------------------------
+  gateway:
+    environment:
+      - KNOWLEDGEHUB_PROFILE=enterprise
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-knowledgehub}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-knowledgehub}
+      - VECTORSTORE_BACKEND=${VECTORSTORE_BACKEND:-qdrant}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - REDIS_URL=redis://redis:6379/0
+      - VLLM_BASE_URL=http://vllm:8000
+    depends_on:
+      ollama:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+
+  # --------------------------------------------------------------------------
+  # Admin – enterprise overrides
+  # --------------------------------------------------------------------------
+  admin:
+    environment:
+      - KNOWLEDGEHUB_PROFILE=enterprise
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-knowledgehub}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-knowledgehub}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-knowledgehub}
+      POSTGRES_USER: ${POSTGRES_USER:-knowledgehub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-knowledgehub}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Qdrant (vector store – enterprise)
+  # --------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  # --------------------------------------------------------------------------
+  # Redis (caching / session store)
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  # --------------------------------------------------------------------------
+  # vLLM (GPU inference)
+  # --------------------------------------------------------------------------
+  vllm:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "${VLLM_PORT:-8080}:8000"
+    environment:
+      - MODEL_NAME=${VLLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      - MAX_MODEL_LEN=${VLLM_MAX_MODEL_LEN:-4096}
+      - GPU_MEMORY_UTILIZATION=${VLLM_GPU_MEMORY:-0.9}
+    command: >
+      --model ${VLLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-4096}
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY:-0.9}
+      --enable-lora
+    volumes:
+      - vllm_models:/root/.cache/huggingface
+      - vllm_lora:/app/lora-adapters
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          memory: 16G
+    restart: unless-stopped
+    networks:
+      - knowledgehub
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  redis_data:
+  vllm_models:
+  vllm_lora:
+
+networks:
+  knowledgehub:
+    driver: bridge

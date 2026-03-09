@@ -1,6 +1,14 @@
-version: "3.9"
+# ============================================================================
+# KnowledgeHub – Docker Compose Development Override
+# ============================================================================
+# Hot reload, debug ports, volume mounts for live editing
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# ============================================================================
 
 services:
+  # --------------------------------------------------------------------------
+  # Gateway – dev overrides
+  # --------------------------------------------------------------------------
   gateway:
     build:
       context: .
@@ -9,13 +17,28 @@ services:
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
+      - ./scripts:/app/scripts
       - ./data:/app/data
-    command: uvicorn src.gateway.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+      - "5678:5678"  # debugpy
+    command: >
+      python -m uvicorn src.gateway.main:app
+      --host 0.0.0.0 --port 8000
+      --reload --reload-dir src
     environment:
       - KNOWLEDGEHUB_PROFILE=mini
       - LOG_LEVEL=debug
       - DEBUG=true
+      - PYTHONDONTWRITEBYTECODE=1
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
+  # --------------------------------------------------------------------------
+  # Admin – dev overrides
+  # --------------------------------------------------------------------------
   admin:
     build:
       context: .
@@ -24,8 +47,25 @@ services:
     volumes:
       - ./src:/app/src
       - ./data:/app/data
-    command: uvicorn src.admin.main:app --host 0.0.0.0 --port 8001 --reload
+    ports:
+      - "${ADMIN_PORT:-8001}:8001"
+      - "5679:5678"  # debugpy
+    command: >
+      python -m uvicorn src.admin.main:app
+      --host 0.0.0.0 --port 8001
+      --reload --reload-dir src
     environment:
       - KNOWLEDGEHUB_PROFILE=mini
       - LOG_LEVEL=debug
       - DEBUG=true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # --------------------------------------------------------------------------
+  # Open WebUI – dev: expose on port 3000
+  # --------------------------------------------------------------------------
+  open-webui:
+    environment:
+      - WEBUI_AUTH=false
