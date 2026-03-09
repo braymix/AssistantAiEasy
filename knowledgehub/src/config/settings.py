@@ -14,6 +14,8 @@ from enum import Enum
 from functools import lru_cache
 from typing import Literal
 
+from typing import Optional
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -70,6 +72,69 @@ _PROFILE_DEFAULTS: dict[str, dict] = {
         "chunk_overlap": 100,
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Enterprise settings (disabled by default, activated in full profile)
+# ---------------------------------------------------------------------------
+
+class EnterpriseSettings(BaseSettings):
+    """Enterprise-only features.
+
+    All fields default to disabled / empty so that the ``mini`` profile
+    works without any enterprise configuration.  Set the corresponding
+    environment variables (prefixed ``KNOWLEDGEHUB_ENTERPRISE_``) or
+    switch to the ``full`` profile to activate them.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="KNOWLEDGEHUB_ENTERPRISE_",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    # ── Authentication ────────────────────────────────────────────────────
+    auth_provider: str = "none"  # none, oidc, ldap
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    ldap_server_url: str = ""
+    ldap_base_dn: str = ""
+    ldap_bind_dn: str = ""
+    ldap_bind_password: str = ""
+
+    # ── Audit ─────────────────────────────────────────────────────────────
+    audit_enabled: bool = False
+    audit_retention_days: int = 90
+
+    # ── Multi-tenancy ─────────────────────────────────────────────────────
+    multitenancy_enabled: bool = False
+    default_tenant: str = "default"
+
+    # ── Clustering / HA ───────────────────────────────────────────────────
+    cluster_enabled: bool = False
+    redis_url: str = ""
+    leader_election_ttl: int = 30
+    session_affinity_ttl: int = 3600
+
+    # ── Monitoring ────────────────────────────────────────────────────────
+    metrics_enabled: bool = True
+    tracing_enabled: bool = False
+    otlp_endpoint: str = ""
+    alert_webhook_url: str = ""
+
+    # ── Enterprise backup ─────────────────────────────────────────────────
+    backup_enabled: bool = False
+    backup_encryption_key: str = ""
+    backup_interval_hours: int = 24
+    backup_retention_daily: int = 7
+    backup_retention_weekly: int = 4
+    backup_retention_monthly: int = 12
+    backup_s3_endpoint: str = ""
+    backup_s3_bucket: str = "knowledgehub-backups"
+    backup_s3_access_key: str = ""
+    backup_s3_secret_key: str = ""
 
 
 class Settings(BaseSettings):
@@ -148,6 +213,9 @@ class Settings(BaseSettings):
     # ── Logging ───────────────────────────────────────────────────────────
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     log_format: Literal["json", "console"] = "json"
+
+    # ── Enterprise ────────────────────────────────────────────────────────
+    enterprise: EnterpriseSettings = Field(default_factory=EnterpriseSettings)
 
     @model_validator(mode="before")
     @classmethod
