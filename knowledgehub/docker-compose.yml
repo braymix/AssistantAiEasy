@@ -1,50 +1,80 @@
-version: "3.9"
+# ============================================================================
+# KnowledgeHub – Docker Compose (mini profile)
+# ============================================================================
+# Services: gateway, admin, ollama, open-webui, chroma
+# Usage:    docker compose up -d
+# ============================================================================
 
 services:
+  # --------------------------------------------------------------------------
+  # Gateway API
+  # --------------------------------------------------------------------------
   gateway:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     ports:
       - "${GATEWAY_PORT:-8000}:8000"
     environment:
-      - KNOWLEDGEHUB_PROFILE=${KNOWLEDGEHUB_PROFILE:-mini}
+      - KNOWLEDGEHUB_PROFILE=mini
       - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/sqlite/knowledgehub.db}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - VECTORSTORE_BACKEND=${VECTORSTORE_BACKEND:-chroma}
       - CHROMA_HOST=${CHROMA_HOST:-chroma}
       - CHROMA_PORT=${CHROMA_PORT:-8100}
+      - KNOWLEDGEHUB_OPENWEBUI_URL=http://open-webui:8080
+      - KNOWLEDGEHUB_OPENWEBUI_TOKEN=${OPENWEBUI_TOKEN:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
-      - ./data/sqlite:/app/data/sqlite
-      - ./data/logs:/app/data/logs
+      - sqlite_data:/app/data/sqlite
+      - log_data:/app/data/logs
     depends_on:
-      - ollama
-      - chroma
+      ollama:
+        condition: service_started
+      chroma:
+        condition: service_started
     restart: unless-stopped
     networks:
       - knowledgehub
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
+  # --------------------------------------------------------------------------
+  # Admin Dashboard API
+  # --------------------------------------------------------------------------
   admin:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        SERVICE: admin
+      target: admin
     ports:
       - "${ADMIN_PORT:-8001}:8001"
     environment:
-      - KNOWLEDGEHUB_PROFILE=${KNOWLEDGEHUB_PROFILE:-mini}
+      - KNOWLEDGEHUB_PROFILE=mini
       - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/sqlite/knowledgehub.db}
       - GATEWAY_URL=http://gateway:8000
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     volumes:
-      - ./data/sqlite:/app/data/sqlite
+      - sqlite_data:/app/data/sqlite
     depends_on:
-      - gateway
+      gateway:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - knowledgehub
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
 
+  # --------------------------------------------------------------------------
+  # Ollama (local LLM inference)
+  # --------------------------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -54,76 +84,60 @@ services:
     restart: unless-stopped
     networks:
       - knowledgehub
-    profiles:
-      - mini
-      - full
+    deploy:
+      resources:
+        limits:
+          memory: 4G
 
+  # --------------------------------------------------------------------------
+  # ChromaDB (vector store)
+  # --------------------------------------------------------------------------
   chroma:
     image: chromadb/chroma:latest
     ports:
       - "${CHROMA_PORT:-8100}:8000"
     volumes:
-      - ./data/chroma:/chroma/chroma
+      - chroma_data:/chroma/chroma
     restart: unless-stopped
     networks:
       - knowledgehub
-    profiles:
-      - mini
-      - full
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "${QDRANT_PORT:-6333}:6333"
-      - "${QDRANT_GRPC_PORT:-6334}:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-    networks:
-      - knowledgehub
-    profiles:
-      - full
-
-  postgres:
-    image: postgres:16-alpine
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-knowledgehub}
-      POSTGRES_USER: ${POSTGRES_USER:-knowledgehub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    networks:
-      - knowledgehub
-    profiles:
-      - full
-
-  vllm:
-    image: vllm/vllm-openai:latest
-    ports:
-      - "${VLLM_PORT:-8080}:8000"
-    volumes:
-      - vllm_models:/root/.cache/huggingface
     deploy:
       resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  # --------------------------------------------------------------------------
+  # Open WebUI (chat frontend)
+  # --------------------------------------------------------------------------
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "${OPENWEBUI_PORT:-3000}:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://gateway:8000
+      - WEBUI_AUTH=${OPENWEBUI_AUTH:-true}
+      - WEBUI_SECRET_KEY=${OPENWEBUI_SECRET:-changeme}
+    volumes:
+      - openwebui_data:/app/backend/data
+    depends_on:
+      gateway:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - knowledgehub
-    profiles:
-      - full
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
 
 volumes:
+  sqlite_data:
+  log_data:
   ollama_data:
-  qdrant_data:
-  postgres_data:
-  vllm_models:
+  chroma_data:
+  openwebui_data:
 
 networks:
   knowledgehub:

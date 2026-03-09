@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Contexts - KnowledgeHub Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Contexts</h1>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ total }} context{{ 's' if total != 1 }} configured</p>
+  </div>
+  <button id="new-context-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    New Context
+  </button>
+</div>
+
+<!-- New/edit context form (hidden by default) -->
+<div id="context-form-container" class="hidden mb-6 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+  <h2 id="form-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">New Context</h2>
+  <form id="context-form" class="space-y-3" method="post" action="/ui/contexts">
+    <input type="hidden" id="ctx-id" name="id" value="">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label for="ctx-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name <span class="text-red-500">*</span></label>
+        <input type="text" id="ctx-name" name="name" required maxlength="200"
+          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500"
+          placeholder="e.g. technology" aria-required="true">
+      </div>
+      <div>
+        <label for="ctx-parent" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Parent</label>
+        <select id="ctx-parent" name="parent_id"
+          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500">
+          <option value="">(none - root level)</option>
+          {% for ctx in flat_contexts %}
+          <option value="{{ ctx.id }}">{{ ctx.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div>
+      <label for="ctx-desc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+      <input type="text" id="ctx-desc" name="description" maxlength="500"
+        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500"
+        placeholder="Optional description">
+    </div>
+    <div class="flex items-center gap-3">
+      <button type="submit" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition">Save</button>
+      <button type="button" id="cancel-form" class="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- Context tree -->
+<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+  {% macro render_tree(nodes, depth=0) %}
+  <ul class="{% if depth > 0 %}ml-6 border-l border-gray-200 dark:border-gray-800 pl-4{% endif %} space-y-2" role="{% if depth == 0 %}tree{% else %}group{% endif %}">
+    {% for node in nodes %}
+    <li role="treeitem" aria-expanded="true" id="ctx-{{ node.id }}">
+      <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/30 group transition">
+        {% if node.children %}
+        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        {% else %}
+        <span class="w-4 h-4 flex-shrink-0"></span>
+        {% endif %}
+        <svg class="w-4 h-4 text-brand-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+        <div class="flex-1 min-w-0">
+          <span class="font-medium text-sm text-gray-900 dark:text-white">{{ node.name }}</span>
+          {% if node.description %}
+          <span class="text-xs text-gray-400 ml-2">{{ node.description }}</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          <button onclick="editContext('{{ node.id }}', '{{ node.name }}', '{{ node.description or '' }}', '{{ node.parent_id or '' }}')"
+            class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" aria-label="Edit context {{ node.name }}" title="Edit">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+          <button
+            hx-delete="/ui/htmx/contexts/{{ node.id }}"
+            hx-target="#ctx-{{ node.id }}"
+            hx-swap="outerHTML"
+            hx-confirm="Delete context '{{ node.name }}'?{{ ' This will fail if it has children or dependencies.' if node.children }}"
+            class="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 dark:hover:text-red-400" aria-label="Delete context {{ node.name }}" title="Delete">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </div>
+      </div>
+      {% if node.children %}
+      {{ render_tree(node.children, depth + 1) }}
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endmacro %}
+
+  {% if tree %}
+  {{ render_tree(tree) }}
+  {% else %}
+  <div class="text-center py-12 text-gray-400 dark:text-gray-600">
+    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+    No contexts yet. Click "New Context" to create one.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var formContainer = document.getElementById('context-form-container');
+  var formTitle = document.getElementById('form-title');
+  var form = document.getElementById('context-form');
+
+  document.getElementById('new-context-btn').addEventListener('click', function() {
+    formTitle.textContent = 'New Context';
+    form.action = '/ui/contexts';
+    document.getElementById('ctx-id').value = '';
+    document.getElementById('ctx-name').value = '';
+    document.getElementById('ctx-desc').value = '';
+    document.getElementById('ctx-parent').value = '';
+    formContainer.classList.remove('hidden');
+    document.getElementById('ctx-name').focus();
+  });
+
+  document.getElementById('cancel-form').addEventListener('click', function() {
+    formContainer.classList.add('hidden');
+  });
+
+  window.editContext = function(id, name, desc, parentId) {
+    formTitle.textContent = 'Edit Context';
+    form.action = '/ui/contexts/' + id;
+    document.getElementById('ctx-id').value = id;
+    document.getElementById('ctx-name').value = name;
+    document.getElementById('ctx-desc').value = desc;
+    document.getElementById('ctx-parent').value = parentId;
+    formContainer.classList.remove('hidden');
+    document.getElementById('ctx-name').focus();
+  };
+})();
+</script>
+{% endblock %}

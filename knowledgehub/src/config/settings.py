@@ -14,6 +14,8 @@ from enum import Enum
 from functools import lru_cache
 from typing import Literal
 
+from typing import Optional
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,6 +35,11 @@ class LLMBackend(str, Enum):
     VLLM = "vllm"
 
 
+class EmbeddingBackend(str, Enum):
+    LOCAL = "local"
+    OLLAMA = "ollama"
+
+
 # ---------------------------------------------------------------------------
 # Profile-specific defaults
 # ---------------------------------------------------------------------------
@@ -42,8 +49,11 @@ _PROFILE_DEFAULTS: dict[str, dict] = {
         "database_url": "sqlite+aiosqlite:///./data/sqlite/knowledgehub.db",
         "vectorstore_backend": VectorStoreBackend.CHROMA,
         "llm_backend": LLMBackend.OLLAMA,
+        "embedding_backend": EmbeddingBackend.LOCAL,
         "ollama_model": "llama3.2:3b",
+        "embedding_model": "all-MiniLM-L6-v2",
         "embedding_dimension": 384,
+        "embedding_batch_size": 64,
         "max_concurrent_requests": 4,
         "chunk_size": 512,
         "chunk_overlap": 50,
@@ -52,13 +62,79 @@ _PROFILE_DEFAULTS: dict[str, dict] = {
         "database_url": "postgresql+asyncpg://knowledgehub:changeme@postgres:5432/knowledgehub",
         "vectorstore_backend": VectorStoreBackend.QDRANT,
         "llm_backend": LLMBackend.VLLM,
+        "embedding_backend": EmbeddingBackend.OLLAMA,
         "vllm_model": "meta-llama/Llama-3.1-8B-Instruct",
-        "embedding_dimension": 384,
+        "ollama_embedding_model": "nomic-embed-text",
+        "embedding_dimension": 768,
+        "embedding_batch_size": 128,
         "max_concurrent_requests": 32,
         "chunk_size": 1024,
         "chunk_overlap": 100,
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Enterprise settings (disabled by default, activated in full profile)
+# ---------------------------------------------------------------------------
+
+class EnterpriseSettings(BaseSettings):
+    """Enterprise-only features.
+
+    All fields default to disabled / empty so that the ``mini`` profile
+    works without any enterprise configuration.  Set the corresponding
+    environment variables (prefixed ``KNOWLEDGEHUB_ENTERPRISE_``) or
+    switch to the ``full`` profile to activate them.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="KNOWLEDGEHUB_ENTERPRISE_",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    # ── Authentication ────────────────────────────────────────────────────
+    auth_provider: str = "none"  # none, oidc, ldap
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_uri: str = ""
+    ldap_server_url: str = ""
+    ldap_base_dn: str = ""
+    ldap_bind_dn: str = ""
+    ldap_bind_password: str = ""
+
+    # ── Audit ─────────────────────────────────────────────────────────────
+    audit_enabled: bool = False
+    audit_retention_days: int = 90
+
+    # ── Multi-tenancy ─────────────────────────────────────────────────────
+    multitenancy_enabled: bool = False
+    default_tenant: str = "default"
+
+    # ── Clustering / HA ───────────────────────────────────────────────────
+    cluster_enabled: bool = False
+    redis_url: str = ""
+    leader_election_ttl: int = 30
+    session_affinity_ttl: int = 3600
+
+    # ── Monitoring ────────────────────────────────────────────────────────
+    metrics_enabled: bool = True
+    tracing_enabled: bool = False
+    otlp_endpoint: str = ""
+    alert_webhook_url: str = ""
+
+    # ── Enterprise backup ─────────────────────────────────────────────────
+    backup_enabled: bool = False
+    backup_encryption_key: str = ""
+    backup_interval_hours: int = 24
+    backup_retention_daily: int = 7
+    backup_retention_weekly: int = 4
+    backup_retention_monthly: int = 12
+    backup_s3_endpoint: str = ""
+    backup_s3_bucket: str = "knowledgehub-backups"
+    backup_s3_access_key: str = ""
+    backup_s3_secret_key: str = ""
 
 
 class Settings(BaseSettings):
@@ -99,6 +175,7 @@ class Settings(BaseSettings):
     chroma_host: str = "chroma"
     chroma_port: int = 8100
     chroma_collection: str = "knowledgehub"
+    chroma_persist_dir: str = "./data/chroma"
 
     # Qdrant
     qdrant_host: str = "qdrant"
@@ -106,8 +183,11 @@ class Settings(BaseSettings):
     qdrant_collection: str = "knowledgehub"
 
     # ── Embeddings ────────────────────────────────────────────────────────
+    embedding_backend: EmbeddingBackend = EmbeddingBackend.LOCAL
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
+    embedding_batch_size: int = 64
+    ollama_embedding_model: str = "nomic-embed-text"
 
     # ── LLM ───────────────────────────────────────────────────────────────
     llm_backend: LLMBackend = LLMBackend.OLLAMA
@@ -126,9 +206,16 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 50
 
+    # ── Open WebUI integration ─────────────────────────────────────────────
+    openwebui_url: str = "http://localhost:3000"
+    openwebui_token: str = ""
+
     # ── Logging ───────────────────────────────────────────────────────────
     log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
     log_format: Literal["json", "console"] = "json"
+
+    # ── Enterprise ────────────────────────────────────────────────────────
+    enterprise: EnterpriseSettings = Field(default_factory=EnterpriseSettings)
 
     @model_validator(mode="before")
     @classmethod

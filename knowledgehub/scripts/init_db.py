@@ -1,8 +1,13 @@
-"""Initialize the database – creates all tables.
+"""Initialize the KnowledgeHub database.
 
-Tables created:
-  conversations, messages, contexts, knowledge_items,
-  detection_rules, documents
+Idempotent script that:
+  1. Creates the data directory (SQLite) if needed
+  2. Creates all tables via Base.metadata.create_all (safe to re-run)
+  3. Optionally applies seed data (--seed flag)
+
+Usage:
+    python scripts/init_db.py          # create tables only
+    python scripts/init_db.py --seed   # create tables + seed rules
 """
 
 import asyncio
@@ -19,21 +24,49 @@ from src.shared.database import init_db, dispose_engine
 logger = get_logger(__name__)
 
 
-async def main():
+async def main() -> None:
     settings = get_settings()
     setup_logging(settings)
 
-    logger.info("initializing_database", profile=settings.profile.value, db=settings.database_url)
+    seed = "--seed" in sys.argv
 
-    # For SQLite, ensure the directory exists
+    logger.info(
+        "initializing_database",
+        profile=settings.profile.value,
+        database=settings.database_url,
+        seed=seed,
+    )
+
+    # ── 1. Ensure data directory exists (SQLite only) ───────────────────────
     if settings.is_sqlite:
         db_path = settings.database_url.split("///")[-1]
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        data_dir = Path(db_path).parent
+        data_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("sqlite_directory_ready", path=str(data_dir))
 
-    await init_db()
+    # ── 2. Create all tables (idempotent – skips existing) ──────────────────
+    try:
+        await init_db()
+        logger.info("tables_created_or_verified")
+    except Exception:
+        logger.exception("failed_to_create_tables")
+        await dispose_engine()
+        sys.exit(1)
+
+    # ── 3. Optional: seed default rules and contexts ────────────────────────
+    if seed:
+        logger.info("running_seed")
+        try:
+            from scripts.seed_rules import seed_defaults
+            await seed_defaults()
+            logger.info("seed_complete")
+        except Exception:
+            logger.exception("seed_failed")
+            await dispose_engine()
+            sys.exit(1)
+
     await dispose_engine()
-
-    logger.info("database_initialized")
+    logger.info("database_initialization_complete")
 
 
 if __name__ == "__main__":

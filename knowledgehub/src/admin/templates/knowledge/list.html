@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base - KnowledgeHub Admin{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Knowledge Base</h1>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ total }} item{{ 's' if total != 1 }}</p>
+  </div>
+  <div class="flex gap-2">
+    <a href="/ui/knowledge/review" class="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-900/50 transition">
+      Review Pending ({{ pending_count }})
+    </a>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 mb-4">
+  <form method="get" action="/ui/knowledge" class="flex flex-wrap items-end gap-3">
+    <div class="flex-1 min-w-[150px]">
+      <label for="search" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Search</label>
+      <input type="text" id="search" name="search" value="{{ search or '' }}" placeholder="Content..."
+        class="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500" aria-label="Search knowledge items">
+    </div>
+    <div>
+      <label for="verified" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</label>
+      <select id="verified" name="verified"
+        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500" aria-label="Filter by verification status">
+        <option value="">All</option>
+        <option value="true" {{ 'selected' if filter_verified == 'true' }}>Verified</option>
+        <option value="false" {{ 'selected' if filter_verified == 'false' }}>Pending</option>
+      </select>
+    </div>
+    <div>
+      <label for="content_type" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Type</label>
+      <select id="content_type" name="content_type"
+        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-brand-500" aria-label="Filter by content type">
+        <option value="">All</option>
+        <option value="manual" {{ 'selected' if filter_type == 'manual' }}>Manual</option>
+        <option value="document" {{ 'selected' if filter_type == 'document' }}>Document</option>
+        <option value="conversation_extract" {{ 'selected' if filter_type == 'conversation_extract' }}>Extracted</option>
+      </select>
+    </div>
+    <button type="submit" class="px-4 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 font-medium transition">Filter</button>
+    {% if search or filter_verified or filter_type %}
+    <a href="/ui/knowledge" class="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Knowledge items list -->
+<div class="space-y-3" id="knowledge-list">
+  {% for item in items %}
+  <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 transition" id="ki-{{ item.id }}">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-2 flex-wrap">
+          {% if item.verified %}
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+            Verified
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>
+            Pending
+          </span>
+          {% endif %}
+          <span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">{{ item.content_type.value }}</span>
+          {% for ctx in (item.contexts or [])[:3] %}
+          <span class="px-1.5 py-0.5 rounded text-xs bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400">{{ ctx }}</span>
+          {% endfor %}
+        </div>
+        <p class="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">{{ item.content }}</p>
+        <div class="text-xs text-gray-400 mt-2">
+          {% if item.created_by %}By {{ item.created_by }}{% endif %}
+          {% if item.created_at %} &middot; {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+        </div>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        {% if not item.verified %}
+        <button hx-post="/ui/htmx/knowledge/{{ item.id }}/verify" hx-target="#ki-{{ item.id }}" hx-swap="outerHTML"
+          class="p-1.5 rounded hover:bg-green-50 dark:hover:bg-green-900/20 text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition" title="Approve" aria-label="Approve item">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        </button>
+        {% endif %}
+        <button hx-delete="/ui/htmx/knowledge/{{ item.id }}" hx-target="#ki-{{ item.id }}" hx-swap="outerHTML" hx-confirm="Delete this knowledge item?"
+          class="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition" title="Delete" aria-label="Delete item">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-12 text-center text-gray-400 dark:text-gray-600">
+    <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+    No knowledge items found.
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if total > limit %}
+<div class="flex items-center justify-between mt-6">
+  <div class="text-sm text-gray-500 dark:text-gray-400">
+    Showing {{ offset + 1 }}-{{ [offset + limit, total]|min }} of {{ total }}
+  </div>
+  <div class="flex gap-2">
+    {% if offset > 0 %}
+    <a href="?offset={{ [offset - limit, 0]|max }}&limit={{ limit }}{% if search %}&search={{ search }}{% endif %}{% if filter_verified %}&verified={{ filter_verified }}{% endif %}{% if filter_type %}&content_type={{ filter_type }}{% endif %}"
+      class="px-3 py-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Previous</a>
+    {% endif %}
+    {% if offset + limit < total %}
+    <a href="?offset={{ offset + limit }}&limit={{ limit }}{% if search %}&search={{ search }}{% endif %}{% if filter_verified %}&verified={{ filter_verified }}{% endif %}{% if filter_type %}&content_type={{ filter_type }}{% endif %}"
+      class="px-3 py-1.5 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">Next</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

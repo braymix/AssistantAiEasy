@@ -19,3 +19,4 @@ class DetectionResult(BaseModel):
     triggered_rules: list[TriggeredRule] = Field(default_factory=list)
     suggested_topics: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    processing_time_ms: int = Field(default=0)

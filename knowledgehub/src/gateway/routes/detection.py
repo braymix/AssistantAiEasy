@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.detection.engine import DetectionEngine
+from src.detection.rules import DetectionContext
 from src.gateway.schemas.detection import DetectionRequest, DetectionResult
 from src.shared.database import get_db_session
 
@@ -20,5 +21,6 @@ async def detect_context(
     engine: DetectionEngine = Depends(_engine),
 ) -> DetectionResult:
     """Analyze input text and detect relevant context / triggers."""
-    result = await engine.detect(payload.text, payload.context)
+    ctx = DetectionContext(user_info=payload.context)
+    result = await engine.detect(payload.text, ctx)
     return result
